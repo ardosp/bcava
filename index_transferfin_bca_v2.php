@@ -85,9 +85,9 @@
         
         <div class="panel panel-default" id="top-table">
             <div class="panel-body">
-              <div class="alert alert-danger">
+              <!-- <div class="alert alert-danger">
                 <strong>payment_bca_paid_tes</strong> 
-              </div>
+              </div> -->
               <div class="container-fluid">
                   <div class="row" style="display: none;">
                       <div class="progress">
@@ -111,6 +111,16 @@
                       &nbsp;&nbsp;&nbsp;
 
                       <!-- <button class="btn btn-sm btn-success" disabled="" style="height: 35px; font-size: 12px;" onclick="getDoPaidFin()" id="trf_post_klik" value="post_klik" name="post_klik"><i class="glyphicon glyphicon-send" style="width: 20px;"> </i><b>TRANSFER</b></button> -->
+
+                      <div class="pull-right">
+                      APLDATE : <strong><?php
+                      $sql_apldate = "select top 1 apldate from core_nasabah with(nolock)";
+                      $exec_apldate = mssql_query($sql_apldate);
+                      $data_apldate = mssql_fetch_assoc($exec_apldate);
+                        echo dateSQLKaco($data_apldate['apldate']); ?></strong>
+
+                        <input type="hidden" name="h_apldate" id="h_apldate" value="<?php echo dateSQL(dateSQLKaco($data_apldate['apldate'])); ?>">
+                      </div>
                                                             
                   </div>
               </div>
@@ -148,6 +158,104 @@
 </body>
 
 <script type="text/javascript">
+    $(document).ready(function(){
+
+      $("body table").on("click","button[name=trf_post_klik]",function(){
+          // alert('tes');
+          ini = $(this);
+          let traceno = $(this).attr('data-traceno');
+          let vano = $(this).attr('data-vano');
+          let paymentdate = $(this).attr('data-paymentdate');
+          let amount = $(this).attr('data-amount');
+
+          
+          swal({
+            icon: 'warning',
+            title: 'Apakah anda yakin?',
+            text: "Anda akan meneruskan proses pembayaran dari VA BCA ke Financore.",
+            buttons: {
+              cancel: {text: "Tidak", visible: true},
+              confirm: {text: "Lanjut | Bayar ke Financore",},
+            },
+          }).then(function(isConf){
+            if (isConf) {
+              $.ajax({
+                  queue: true,
+                  cache: false,
+                  timeout: 600000,
+                  //dataType:"json",
+                  type: 'POST',
+                  url: 'module/payment/bcava/action_api.php',
+                  data: {
+                    'action':'v2.dopaidfin.vabca',
+                    'traceno': traceno,
+                    'vano': vano,
+                    'paymentdate': paymentdate,
+                    'amount': amount
+                  },
+                  beforeSend:function(){
+                      console.log("beforeSend")
+                      HoldOn.open({
+                          theme: "sk-dot",
+                          message: "PLEASE WAIT... ",
+                          backgroundColor: "#fcf7f7",
+                          textColor: "#000"
+                      });
+                  },
+                  success: function(response) {
+                      console.log("response : "+response);   
+                      respParse = parseJson(response);  
+
+                      if(respParse.status_code==1){
+                        swal({
+                            icon: "success",
+                            title: "Success!",
+                            text: respParse.status_desc
+                            // button: "Okay"
+                        }).then(function() {
+                            ini.closest("tr").remove();
+                            // ini.attr('class','hide');  
+                            // $('.print_slip').removeClass("hide");
+                              
+                            // $("a.print_slip").prop("href","module/payment/installment/print_slip_query.php?norek="+respParse.norek+"&nopin="+respParse.nopin+"&noinvoice="+respParse.invblankono);
+                        });
+
+                          // icon = "success";
+                          // title = "Sukses";
+                          
+                          // ini.closest("tr").remove();
+                      } else {
+                        swal({
+                            icon: 'error',
+                            title: 'Oops...',
+                            text: respParse.status_desc
+                        }).then(function() {
+                            preventDefault();
+                        });
+
+                          // icon = "error";
+                          // title = "Gagal";
+                      }
+                      
+                      // swal({
+                      //   title: title,
+                      //   text: respParse.status_desc,
+                      //   icon: icon
+                      // }).then(function(){                          
+                      //     // location.reload();
+                      // });    
+                      // // document.getElementById("trf_post_klik").disabled = true;                                 
+                      HoldOn.close();
+                      
+                      
+                  }
+              });
+            }
+          });
+      });
+
+    });
+
     var array = new Array();
     /* Mengambil tanggal untuk parameter penarikan report */
     function getPayVA(){ 
@@ -165,7 +273,7 @@
             type: 'POST',
             url: 'module/payment/bcava/action_api.php',
             data: {
-              'action':'getpayva.vabca.tes',
+              'action':'getpayva.vabca',
               'tgl_transfer':tgl_transfer,
               'tgl_transfer_end':tgl_transfer_end
             },
@@ -199,8 +307,11 @@
                                     "<td>"+resObj[i].keterangan+"</td>"+
                                     "<td>"+resObj[i].traceno+"</td>"+
                                     "<td>"+resObj[i].delchannel+"</td>"+  
-                                    // "<td><button class=\"btn btn-sm btn-success\" disabled=\"\" style=\"height: 35px; font-size: 12px;\" onclick=\"getDoPaidFin()\" id=\"trf_post_klik\" value=\"post_klik\" name=\"post_klik\"><i class=\"glyphicon glyphicon-send\" style=\"width: 20px;\"> </i><b>TRANSFER</b></button></td>"+                              
+                                    "<td><button class=\"btn btn-sm btn-success\"  style=\"height: 35px; font-size: 12px;\"  id=\"trf_post_klik\" value=\"trf_post_klik\" name=\"trf_post_klik\" data-traceno="+resObj[i].traceno+" data-vano="+resObj[i].vano+" data-paymentdate="+resObj[i].payment_date+" data-amount="+resObj[i].amount+"><i class=\"glyphicon glyphicon-send\" style=\"width: 20px;\"> </i><b>TRANSFER</b></button> <a href=\"\" id=\"print_slip\" name=\"print_slip\" class=\"btn_gedi btn-primary print_slip hide\" target=\"_blank\" style=\"font-size:12px; Font-weight:bold;\"><i class=\"glyphicon glyphicon-print\"></i> Print Slip</a>  </td>"+  
+                                                              
                                     "</tr>";
+                                    // onclick="+getDoPaidFin()+"
+                                    // disabled=\"\"
                         spcData.append(markup);
                         data_arr = [
                           resObj[i].traceno,
@@ -213,13 +324,33 @@
                         no++;
                     }
                 }else{
+                    if(respParse.status_code==1){
+                        icon = "success";
+                        title = "Sukses";
+                        spcData = $("table#data-table > tbody:last-child");
+                        spcData.children("tr").remove();
+                    }else{
+                        icon = "error";
+                        title = "Gagal";
+                    }
+                    
                     swal({
-                      title:"Sukses",
+                      title: title,
                       text: respParse.status_desc,
-                      icon: "warning"
+                      icon: icon
                     }).then(function(){                          
-                      document.getElementById("trf_post_klik").disabled = true;
-                    });   
+                        // location.reload();
+                        document.getElementById("trf_post_klik").disabled = true;
+                    }); 
+
+
+                    // swal({
+                    //   title:"Sukses",
+                    //   text: respParse.status_desc,
+                    //   icon: "warning"
+                    // }).then(function(){                          
+                    //   document.getElementById("trf_post_klik").disabled = true;
+                    // });   
                 }
                 HoldOn.close();
                 if(resObj.length > 0){
@@ -230,73 +361,85 @@
         }
     }
     /** */
-    function getDoPaidFin(){ 
-      console.log(array);
-        var tgl_transfer = $("input[name=tgl_transfer]").val();
-        var tgl_transfer_end = $("input[name='tgl_transfer_end']").val();
+    // function getDoPaidFin(){ 
+    //   // console.log(array);
+    //   // alert('tes');
+    //     // var tgl_transfer = $("input[name=tgl_transfer]").val();
+    //     // var tgl_transfer_end = $("input[name='tgl_transfer_end']").val();
+    //     let traceno = $(this).attr('data-traceno');
+    //     let vano = $(this).attr('data-vano');
+    //     let trxdate = $(this).attr('data-trxdate');
 
-        if(tgl_transfer=="" || tgl_transfer_end==""){
-            alert("Tanggal tidak boleh kosong");
-        }else{
-            swal({
-              icon: 'warning',
-              title: 'Apakah anda yakin?',
-              text: "Anda akan meneruskan proses pembayaran dari VA BCA ke Financore.",
-              buttons: {
-                cancel: {text: "Tidak", visible: true},
-                confirm: {text: "Lanjut | Bayar ke Financore",},
-              },
-            }).then(function(isConf){
-              if (isConf) {
-                $.ajax({
-                    queue: true,
-                    cache: false,
-                    timeout: 600000,
-                    //dataType:"json",
-                    type: 'POST',
-                    url: 'module/payment/bcava/action_api.php',
-                    data: {
-                      'action':'dopaidfin.vabca',
-                      'tgl_transfer':tgl_transfer,
-                      'tgl_transfer_end':tgl_transfer_end,
-                      'data_array': array
-                    },
-                    beforeSend:function(){
-                        console.log("beforeSend")
-                        HoldOn.open({
-                            theme: "sk-dot",
-                            message: "PLEASE WAIT... ",
-                            backgroundColor: "#fcf7f7",
-                            textColor: "#000"
-                        });
-                    },
-                    success: function(response) {
-                        console.log("response : "+response);   
-                        respParse = parseJson(response);  
-                        if(respParse.status_code==1){
-                            icon = "success";
-                            spcData = $("table#data-table > tbody:last-child");
-                            spcData.children("tr").remove();
-                        }else{
-                            icon = "warning";
-                        }
+    //     console.log(traceno, vano, trxdate);
+        
+
+    //     // if(tgl_transfer=="" || tgl_transfer_end==""){
+    //     //     alert("Tanggal tidak boleh kosong");
+    //     // }else{
+    //         swal({
+    //           icon: 'warning',
+    //           title: 'Apakah anda yakin?',
+    //           text: "Anda akan meneruskan proses pembayaran dari VA BCA ke Financore.",
+    //           buttons: {
+    //             cancel: {text: "Tidak", visible: true},
+    //             confirm: {text: "Lanjut | Bayar ke Financore",},
+    //           },
+    //         }).then(function(isConf){
+    //           if (isConf) {
+    //             $.ajax({
+    //                 queue: true,
+    //                 cache: false,
+    //                 timeout: 600000,
+    //                 //dataType:"json",
+    //                 type: 'POST',
+    //                 url: 'module/payment/bcava/action_api.php',
+    //                 data: {
+    //                   'action':'tes.dopaidfin.vabca',
+    //                   'traceno': traceno,
+    //                   'vano': vano,
+    //                   'trxdate': trxdate
+    //                   // 'tgl_transfer':tgl_transfer,
+    //                   // 'tgl_transfer_end':tgl_transfer_end,
+    //                   // 'data_array': array
+    //                 },
+    //                 beforeSend:function(){
+    //                     console.log("beforeSend")
+    //                     HoldOn.open({
+    //                         theme: "sk-dot",
+    //                         message: "PLEASE WAIT... ",
+    //                         backgroundColor: "#fcf7f7",
+    //                         textColor: "#000"
+    //                     });
+    //                 },
+    //                 success: function(response) {
+    //                     console.log("response : "+response);   
+    //                     respParse = parseJson(response);  
+    //                     if(respParse.status_code==1){
+    //                         icon = "success";
+    //                         title = "Sukses";
+    //                         spcData = $("table#data-table > tbody:last-child");
+    //                         spcData.children("tr").remove();
+    //                     }else{
+    //                         icon = "error";
+    //                         title = "Gagal";
+    //                     }
                         
-                        swal({
-                              title:"Sukses",
-                              text: respParse.status_desc,
-                              icon: icon
-                            }).then(function(){                          
-                                // location.reload();
-                            });                                     
-                        HoldOn.close();
-                        document.getElementById("trf_post_klik").disabled = true;
-                        //getReport(response,0,response.length)
-                    }
-                });
-              }
-            });
-        }
-    }
+    //                     swal({
+    //                       title: title,
+    //                       text: respParse.status_desc,
+    //                       icon: icon
+    //                     }).then(function(){                          
+    //                         // location.reload();
+    //                     });                                     
+    //                     HoldOn.close();
+    //                     document.getElementById("trf_post_klik").disabled = true;
+    //                     //getReport(response,0,response.length)
+    //                 }
+    //             });
+    //           }
+    //         });
+    //     // }
+    // }
     
     /* custom parse json */
     function parseJson(str){

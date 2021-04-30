@@ -134,7 +134,7 @@
                     
                     <div class="pull-right">
                     APLDATE : <strong><?php
-                    $sql_apldate = "select top 1 apldate from core_nasabah";
+                    $sql_apldate = "select top 1 apldate from core_nasabah with(nolock)";
                     $exec_apldate = mssql_query($sql_apldate);
                     $data_apldate = mssql_fetch_assoc($exec_apldate);
                       echo dateSQLKaco($data_apldate['apldate']); ?></strong>

@@ -13,9 +13,13 @@ $year_tgltransaksi = substr(dateSQL($_POST['tgltransaksi']),0,4)."<br>";
 $tgl_transaksi = dateSQL($txndate.'/'.$year_tgltransaksi);
 $tgl_settlement = dateSQL($settlementdate.'/'.$year_tgltransaksi);
 
-$new_tgl = DateTime::createFromFormat('Y-m-d', strtotime($tgl_settlement)) !== FALSE ? $tgl_settlement : $tgl_transaksi;
+$new_tgl = validateDate($tgl_settlement, 'Y-m-d') !== FALSE ? $tgl_settlement : $tgl_transaksi;
 
-
+function validateDate($date, $format = 'Y-m-d H:i:s')
+{
+    $d = DateTime::createFromFormat($format, $date);
+    return $d && $d->format($format) == $date;
+}
 
 $query = "SELECT *,sts=case when status=0 then 'UNPAID' when status=1 then 'PAID' when status=2 then 'RELEASE' end from payment_bca_paid where dbo.tanggal_saja(TransactionDate) <= dbo.tanggal_saja('$new_tgl') and Settlementdate is null ";
 $exec = mssql_query($query);
@@ -91,8 +95,8 @@ $exec = mssql_query($query);
   transform: rotate(45deg);
 }
 </style>
-
-<form action="module/payment/bcava/action_api.php?action=submit_release" id="form_rekonrinci" method="POST">
+<!-- onsubmit="return confirm('Do you really want to Release Payment?');" -->
+<form action="module/payment/bcava/action_api.php?action=submit_release" id="form_rekonrinci" method="POST" >
 <input type="hidden" name="h_tgl_settlement" id="h_tgl_settlement" value="<?php echo $new_tgl; ?>">
 <div id="panel-data" class="panel panel-primary">
   <table class="table table-bordered" id="data-table" border="1px solid rgb(190,190,190);">
@@ -106,7 +110,12 @@ $exec = mssql_query($query);
             <th style="vertical-align:middle; width: 8%;">PAYMENT AMOUNT</th>
             <th style="vertical-align:middle; width: 8%;">TOTAL AMOUNT</th>
             <th style="vertical-align:middle; width: 3%;">STATUS</th>
-            <th style="vertical-align:middle; width: 1%;">ACTION
+            <th style="vertical-align:middle; width: 5%;">
+              <!-- <input type="checkbox" onClick="toggle(this)" /> Toggle All -->
+              <label class="container-cekbox">Check All
+                <input type="checkbox" class="custom-control-input" id="checkAll" />
+                <span class="checkmark"></span>
+              </label>
               <!-- <input type="checkbox" class="custom-control-input checkAmountAll" id="checkAmountAll" onclick="checkedAll(checkAmountAll)" value=""> -->
             </th>
           </tr>
@@ -132,13 +141,13 @@ $exec = mssql_query($query);
                 <?php 
                 //if($data['Status']!=2){ ?>
                 <label class="container-cekbox">Check
-                  <input type="checkbox" class="custom-control-input checkAmount" id="checkAmount" name="checkAmount[<?php echo $data['RequestID']; ?>]" value="<?php echo $data['PaidAmount']; ?>" >
+                  <input type="checkbox" class="custom-control-input checkAmount" id="checkAmount" name="checkAmount[<?php echo $data['RequestID'].":".$data['CustomerNumber']; ?>]" value="<?php echo $data['PaidAmount']; ?>" >
                   <span class="checkmark"></span>
                 </label>
                   
                 <?php //} ?>
 
-                  <input type="hidden" class="custom-control-input hiddenCheck" id="hiddenCheck" name="hiddenCheck[<?php echo $data['RequestID']; ?>]" value="<?php echo $data['CustomerNumber']; ?>" >
+                  <!-- <input type="hidden" class="custom-control-input hiddenCheck" id="hiddenCheck" name="hiddenCheck[<?php echo $data['RequestID']; ?>]" value="<?php //echo $data['CustomerNumber']; ?>" > -->
                 </td>
               </tr>
           <?php
@@ -208,9 +217,9 @@ if($sts_unpaid>0){ ?>
             echo "ADA TRANSAKSI YANG BELUM DITARIK";
             
           } else { ?>
-            <!-- <button class="btn btn-sm btn-success" disabled="" style="height: 35px; font-size: 12px;" onclick="getDoRelease(0)" id="trf_post_klik" value="post_klik" name="post_klik"><i class="glyphicon glyphicon-check" style="width: 20px;"> </i><b>RELEASE</b></button>  -->
+            <!-- <button class="btn btn-sm btn-success" disabled="" style="height: 35px; font-size: 12px;" onclick="getDoRelease(0)" id="release_post_klik" value="post_klik" name="post_klik"><i class="glyphicon glyphicon-check" style="width: 20px;"> </i><b>RELEASE</b></button>  -->
 
-            <button type="submit" class="btn btn-sm btn-success" disabled="" style="height: 35px; font-size: 12px;" id="trf_post_klik" value="post_klik" name="post_klik"><i class="glyphicon glyphicon-check" style="width: 20px;"> </i><b>RELEASE</b></button>
+            <button type="submit" class="btn btn-sm btn-success" disabled="" style="height: 35px; font-size: 12px;" id="release_post_klik" value="post_klik" name="post_klik"><i class="glyphicon glyphicon-check" style="width: 20px;"> </i><b>RELEASE</b></button>
           <?php
           }
         ?>
@@ -224,24 +233,47 @@ if($sts_unpaid>0){ ?>
 
 
 
-<script>
-$(document).ready(function()
-{
-    // if (<?php echo $stscek ?> === 1) {
-    //   document.getElementById("trf_post_klik").disabled = false;
-    // } else{
-    //   document.getElementById("trf_post_klik").disabled = true;
-    // }
+<script type="text/javascript">
+$(document).ready(function(){
+    
+    /**Check all */
+    $("#checkAll").click(function () {
+        $('input:checkbox').not(this).prop('checked', this.checked);
+
+        var total = 0;
+        $('input:checkbox:checked').each(function(){
+          total += isNaN(parseInt($(this).val())) ? 0 : parseInt($(this).val());
+        }); 
+        console.log(total);
+        $(".total_amountva").val(Comma(total));
+        $(".h_total_amountva").val(total);
+
+        /**Control tombol release */
+        if ($(".h_total_amountva").val() == $(".h_settlementAmount").val() && $(".total_amountva").val()!=0) {
+          $('#release_post_klik').prop('disabled',false);
+        } else { 
+          $('#release_post_klik').prop('disabled',true);
+        }
+    });
+
+    /**Loading when release */
+    $("form#form_rekonrinci").on("submit", function(){
+      HoldOn.open({
+          theme: "sk-dot",
+          message: "PROCESSING RELEASE... ",
+          backgroundColor: "#fcf7f7",
+          textColor: "#000"
+      });
+    });
 
     /**Ceklist hitung amount */
-    $('table#data-table').on("change",".checkAmount", function ()
-    {
+    $('table#data-table').on("change",".checkAmount", function (){
       // alert('tes');
       var total = 0;
       $('input:checkbox:checked').each(function(){
         total += isNaN(parseInt($(this).val())) ? 0 : parseInt($(this).val());
       });   
-      console.log(total);
+      // console.log(total);
   
       $(".total_amountva").val(Comma(total));
       $(".h_total_amountva").val(total);
@@ -250,11 +282,11 @@ $(document).ready(function()
       
       /**Control tombol release */
       if ($(".h_total_amountva").val() == $(".h_settlementAmount").val() && $(".total_amountva").val()!=0) {
-        // document.getElementById("trf_post_klik").disabled = false;
-        $('#trf_post_klik').prop('disabled',false);
+        
+        $('#release_post_klik').prop('disabled',false);
       } else {
-        // document.getElementById("trf_post_klik").disabled = true;
-        $('#trf_post_klik').prop('disabled',true);
+        
+        $('#release_post_klik').prop('disabled',true);
       }
       
     });
@@ -302,22 +334,7 @@ $(document).ready(function()
     
 });
 
-var checked = false;
-function checkedAll (frm1) {
-  var aa= document.getElementById(frm1);
-  if (checked == false){
-    checked = true
-  }
-  else{
-    checked = false
-  }
-  for (var i =0; i < aa.elements.length; i++) 
-  {
-    if(aa.elements[i].type == 'checkbox') { 
-      aa.elements[i].checked = checked;
-    }
-  }
-}
+
 
 /**Fungsi Release */
 function getDoRelease(id_x){ 
@@ -366,7 +383,7 @@ function getDoRelease(id_x){
     //                   icon: "success"
     //                 }).then(function(){      
     //                     document.getElementById('total_amount').value = "";                
-    //                     document.getElementById("trf_post_klik").disabled = true;
+    //                     document.getElementById("release_post_klik").disabled = true;
     //                 });
                     
     //             }else{

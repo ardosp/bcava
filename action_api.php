@@ -9,7 +9,7 @@ $mitraid_prod = '50000004';
 
 switch ($action) {
     
-
+    /**AMBIL DATA DARI BCA DAN MAF */
     case "request.settlement":
         $transDate = $_POST['tgl_release'];
         $year = date('Y');
@@ -136,6 +136,7 @@ switch ($action) {
         break;
 
 
+    /**FUNGSI TOMBOL CARI */
     case "getpayva.vabca":
         // $date = date_create_from_format('d/m/Y', $_POST['tgl_transfer']);
         // $tgl_transfer = date_format($date, 'Y-m-d');
@@ -179,6 +180,8 @@ switch ($action) {
         echo json_encode($replay);
         break;
 
+
+    /**FUNGSI TOMBOL TRANSFER */
     case "dopaidfin.vabca":
         // $date = date_create_from_format('d/m/Y', $_POST['tgl_transfer']);
         // $tgl_transfer = date_format($date, 'Y-m-d');
@@ -239,53 +242,141 @@ switch ($action) {
         echo json_encode($replay);
         break;
 
+
+    /**FUNGSI TOMBOL RELEASE */
     case "submit_release":
-        $sql_apldate = "select top 1 apldate from core_nasabah";
+        $sql_apldate = "select top 1 apldate from core_nasabah with(nolock)";
         $exec_apldate = mssql_query($sql_apldate);
         $data_apldate = mssql_fetch_assoc($exec_apldate);
 
-        $checkAmount = $_POST['hiddenCheck'];
+        $checkAmount = $_POST['checkAmount'];
         $tgl_apldate = dateSQL(dateSQLKaco($data_apldate['apldate']));
         $tgl_settlement = $_POST['h_tgl_settlement'];
 
         $array_release=array();
         foreach($checkAmount as $requestID => $customerNumber){
-            // echo $key."<br>";
+            
+            $pecah = (explode(":",$requestID));
+            $traceNo = $pecah[0];
+            $custNo = $pecah[1];
+            // echo $requestID;
+
             $array_release[] = array(
-                "query" => "bca_release_reconcile '$tgl_settlement','$tgl_apldate','$customerNumber','$requestID','H2H'"
+                "query" => "bca_release_reconcile '$tgl_settlement','$tgl_apldate','$custNo','$traceNo','H2H'"
             );
 
-            print_r($array_release);
-                
+            
         }
+        // print_r($array_release);
         $i = 0;
         $gagal = 0;
-        while(count($array_release) < $i){
-            $exec = "exec ".$array_release[$i]["query"];
+        // print_r($array_release[0]['query']);
+        // echo count($array_release);
+
+        while(count($array_release) > $i){
+            $sql = "exec ".$array_release[$i]['query'];
+            $exec = mssql_query($sql);
+            // echo $sql;
 
             if(!$exec){
                 $i=count($array_release);
                 $gagal++;
             }
-            $i++;
-            
+            $i++;   
         }
         
-        alert("Sukses ".$i);
+        alert("Sukses : ".$i.". Gagal : ".$gagal);
         redirMeta("../../../isi.php?pid=1357");
         
+        break;
+
+    /**
+     * CASE UNTUK TES
+     */
+    /**FUNGSI TOMBOL CARI TES*/
+    case "tes.getpayva.vabca":
+        $tgl_transfer = DateSQL($_POST['tgl_transfer']);
+        $tgl_transfer_end = DateSQL($_POST['tgl_transfer_end']);
+        
+        mssql_query("SET ANSI_NULLS ON; SET ANSI_WARNINGS ON;");
+        // $sql = "exec bni_dataPostingITDeptKeFinancore '260','".$tgl_transfer."','$user_nik'";
+        $sql = "exec bca_dataPostingITDeptKeFinancore_tes '" . $tgl_transfer . "','" . $tgl_transfer_end . "','$user_nik'";
+        $exec = mssql_query($sql) or die("Error Query [" . $sql . "]");
+        //$numbRows = mssql_num_rows($exec);
+
+        $count_a = 1;
+        $row = array();
+        while ($hsl = mssql_fetch_assoc($exec)) {
+            $col = array();
+            $col['no'] = $count_a;
+            $col['trxdate']     = dateSQLKaco($hsl['trxdate']);
+            $col['payment_date']     = dateSQLKacoTime($hsl['paymentdate']);
+            $col['vano']        = $hsl['vano'];
+            $col['nama']        = $hsl['nama'];
+            $col['amount']      = $hsl['amount'];
+            $col['angsuranround']      = $hsl['angsuranround'];
+            $col['keterangan']  = $hsl['keterangan'];
+            $col['traceno']     = $hsl['traceno'];
+            $col['delchannel']  = $hsl['delchannel'];
+            array_push($row, $col);
+            $count_a++;
+        }
+        if (count($row) > 0) {
+            $replay['status_code'] = 1;
+            $replay['status_desc'] = "Transfer payment Financore ";
+            $replay['total_results'] = count($row);
+            $replay['results'] = $row;
+        } else {
+            $replay['status_code'] = 2;
+            $replay['status_desc'] = "Tidak ada data transfer Financore";
+        }
+        mssql_query("SET ANSI_NULLS OFF; SET ANSI_WARNINGS OFF;");
+        echo json_encode($replay);
+        break;
+
+        
+    /**FUNGSI TOMBOL TRANSFER TES/v2 */
+    case "v2.dopaidfin.vabca":
+        $sql_apldate = "select top 1 apldate from core_nasabah with(nolock)";
+        $exec_apldate = mssql_query($sql_apldate);
+        $data_apldate = mssql_fetch_assoc($exec_apldate);
+
+        $tgl_apldate = dateSQL(dateSQLKaco($data_apldate['apldate']));
+
+        $traceno = $_POST['traceno'];
+        $vano = $_POST['vano'];
+        $paymentdate = dateSQL($_POST['paymentdate']);
+        $amount = $_POST['amount'];
+
+
+        // mssql_query("SET ANSI_NULLS ON; SET ANSI_WARNINGS ON;");
+        
+        // $sql_do = "exec bca_postingITDeptKeFinancore_tes '13034','$vano','$trxdate','$traceno','$user_nik'";
+        $sql_do = "exec payment_angsuran_sismaf  '$user_nik','$vano','13034',$amount,'$tgl_apldate','$paymentdate','$traceno'";
+        // nik, noreknopin, 13034, amount, apldate, tanggalsaja(transactiondate), traceno
+        // $exec_do = mssql_query($sql_do);
+        // $data = mssql_fetch_assoc($exec_do);
+
+        // echo $sql_do;
+        // ;
+        if (mssql_query($sql_do)) {
+        // if (mssql_num_rows($exec_do) > 0) {
+            $replay['status_code'] = 1;
+            $replay['status_desc'] = "Transfer payment Financore ";
+            $replay['results'] = $sql_do;
+            // $replay['norek'] = $data['norek'];
+            // $replay['nopin'] = $data['nopin'];
+            // $replay['invblankono'] = $data['invblankono'];
+            // $replay['ket'] = $data['ket'];
+        } else {
+            $replay['status_code'] = 2;
+            $replay['status_desc'] = "Tidak ada data transfer Financore";
+        }
+
+        
+        // mssql_query("SET ANSI_NULLS OFF; SET ANSI_WARNINGS OFF;");
+        echo json_encode($replay);
         break;
 }
 
 
-
-// function dateSQLz2($stringDate){
-//     if($stringDate!=''){
-//         $time = strtotime($stringDate);
-//         $dateSQL = date("d-m-Y",$time);
-//         return $dateSQL;
-//     }else{
-//         $dateSQL    = "";
-//         return $dateSQL;
-//     }
-// }	
